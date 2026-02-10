@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: 'Microsoft JhengHei', sans-serif; padding: 25px; color: #333; background-color: #f1f3f4; }
+      .container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+      select { width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #dadce0; border-radius: 8px; font-size: 15px; }
+      .btn-group { display: flex; gap: 12px; margin-bottom: 20px; }
+      button { flex: 1; padding: 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; transition: 0.3s; }
+      
+      /* 按鈕顏色定義 */
+      #previewBtn { background-color: #ffffff; color: #1a73e8; border: 1px solid #1a73e8; }
+      #draftBtn { background-color: #5f6368; color: white; }
+      #sendBtn { background-color: #1e8e3e; color: white; }
+      
+      button:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+      button:disabled { background-color: #e8eaed !important; color: #9aa0a6 !important; border: none; cursor: not-allowed; }
+      
+      #previewContainer { border: 1px solid #dadce0; padding: 25px; display: none; height: 350px; overflow-y: auto; background: #ffffff; border-radius: 8px; }
+      .preview-header { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #f1f3f4; }
+      .preview-row { margin-bottom: 8px; display: flex; }
+      .label { width: 70px; font-size: 12px; color: #70757a; font-weight: bold; }
+      .value { flex: 1; font-size: 14px; color: #202124; font-weight: bold; }
+      #pBody { font-size: 15px; line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <p style="font-weight: bold; font-size: 16px; margin-top: 0;">📧 自動化郵件套印系統</p>
+      <select id="draftSelect"><option>載入中...</option></select>
+      
+      <div class="btn-group">
+        <button id="previewBtn" disabled onclick="runTask('preview')">👁️ 預覽第一封</button>
+        <button id="draftBtn" disabled onclick="runTask('draft')">✉️ 僅產生草稿</button>
+        <button id="sendBtn" disabled onclick="runTask('send')">🚀 直接寄出郵件</button>
+      </div>
+
+      <div id="previewContainer">
+        <div class="preview-header">
+          <div class="preview-row"><div class="label">收件人</div><div class="value" id="pTo"></div></div>
+          <div class="preview-row"><div class="label">主旨</div><div class="value" id="pSub"></div></div>
+        </div>
+        <div id="pBody"></div>
+      </div>
+    </div>
+
+    <script>
+      window.onload = function() {
+        google.script.run.withSuccessHandler(function(subjects) {
+          var select = document.getElementById('draftSelect');
+          select.innerHTML = '';
+          if (subjects.length === 0) { select.innerHTML = '<option>找不到草稿</option>'; return; }
+          subjects.forEach(function(sub) { 
+            var opt = document.createElement('option');
+            opt.value = encodeURIComponent(sub); opt.innerText = sub; select.appendChild(opt);
+          });
+          enableButtons(true);
+        }).getDraftSubjects();
+      };
+
+      function enableButtons(enabled) {
+        ['previewBtn', 'draftBtn', 'sendBtn'].forEach(id => document.getElementById(id).disabled = !enabled);
+      }
+
+      function runTask(mode) {
+        if (mode === 'send' && !confirm("確定要依照目前的設定「直接寄出」所有郵件嗎？")) return;
+
+        var selected = decodeURIComponent(document.getElementById('draftSelect').value);
+        var btn = document.getElementById(mode + 'Btn');
+        var oldText = btn.innerText;
+        
+        btn.innerText = '處理中...';
+        enableButtons(false);
+
+        google.script.run
+          .withSuccessHandler(function(result) {
+            btn.innerText = oldText;
+            enableButtons(true);
+            if (mode === 'preview') {
+              document.getElementById('pTo').innerText = result.to;
+              document.getElementById('pSub').innerText = result.subject;
+              document.getElementById('pBody').innerHTML = result.body;
+              document.getElementById('previewContainer').style.display = 'block';
+            } else {
+              alert(result);
+              google.script.host.close();
+            }
+          })
+          .withFailureHandler(function(err) {
+            alert("錯誤: " + err.message);
+            btn.innerText = oldText;
+            enableButtons(true);
+          })
+          .processSelectedDraft(selected, mode);
+      }
+    </script>
+  </body>
+</html>
